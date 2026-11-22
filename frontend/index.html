@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Music Store</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      max-width: 600px;
+      margin: 40px auto;
+      padding: 0 20px;
+      background: #121212;
+      color: #f1f1f1;
+    }
+    button {
+      padding: 10px 18px;
+      font-size: 16px;
+      cursor: pointer;
+      background: #6c5ce7;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+    }
+    button:hover {
+      background: #5b4bc4;
+    }
+    ul {
+      margin-top: 20px;
+      padding-left: 20px;
+    }
+    li {
+      margin: 8px 0;
+      font-size: 18px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Music Store — Каталог</h1>
+  <button id="loadBtn">Load items</button>
+  <ul id="itemsList"></ul>
+
+  <script>
+    const btn = document.getElementById("loadBtn");
+    const list = document.getElementById("itemsList");
+
+    btn.addEventListener("click", async () => {
+      list.innerHTML = "<li>Завантаження...</li>";
+      try {
+        const res = await fetch("http://localhost:3000/items");
+        if (!res.ok) throw new Error(`HTTP error: ${res.status}`);
+        const items = await res.json();
+
+        list.innerHTML = "";
+        items.forEach((item) => {
+          const li = document.createElement("li");
+          li.textContent = `${item.id}. ${item.name}`;
+          list.appendChild(li);
+        });
+      } catch (err) {
+        list.innerHTML = `<li style="color: #ff7675;">Помилка: ${err.message}</li>`;
+      }
+    });
+  </script>
+</body>
+</html>
