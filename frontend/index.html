@@ -3,62 +3,235 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Music Store</title>
+  <title>Music Store — Resilience Demo</title>
   <style>
     body {
       font-family: sans-serif;
-      max-width: 600px;
+      max-width: 650px;
       margin: 40px auto;
       padding: 0 20px;
       background: #121212;
       color: #f1f1f1;
     }
+    .banner {
+      display: none;
+      padding: 12px;
+      margin-bottom: 16px;
+      background: #d63031;
+      color: #fff;
+      border-radius: 6px;
+      font-weight: bold;
+    }
+    .row { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }
+    input {
+      padding: 10px;
+      font-size: 15px;
+      border-radius: 6px;
+      border: 1px solid #444;
+      background: #1e1e1e;
+      color: #fff;
+      flex: 1;
+    }
     button {
-      padding: 10px 18px;
-      font-size: 16px;
+      padding: 10px 16px;
+      font-size: 15px;
       cursor: pointer;
       background: #6c5ce7;
       color: #fff;
       border: none;
       border-radius: 6px;
     }
-    button:hover {
-      background: #5b4bc4;
-    }
-    ul {
-      margin-top: 20px;
-      padding-left: 20px;
-    }
-    li {
-      margin: 8px 0;
-      font-size: 18px;
+    button:disabled { background: #555; cursor: not-allowed; }
+    pre {
+      background: #1e1e1e;
+      padding: 12px;
+      border-radius: 6px;
+      overflow-x: auto;
+      font-size: 13px;
     }
   </style>
 </head>
 <body>
-  <h1>Music Store — Каталог</h1>
-  <button id="loadBtn">Load items</button>
-  <ul id="itemsList"></ul>
+  <h1>Music Store — Замовлення</h1>
+
+  <div id="degradedBanner" class="banner">
+    Сервер перевантажено (Degraded mode). Кнопки тимчасово вимкнено на 5 секунд...
+  </div>
+
+  <div class="row">
+    <input id="titleInput" type="text" placeholder="Назва інструменту (напр. Gibson Les Paul)" value="Gibson Les Paul" />
+    <button id="orderBtn">Створити замовлення</button>
+    <button id="doubleBtn">Тест подвійного кліку</button>
+  </div>
+
+  <div class="row">
+    <button id="healthBtn">Перевірити /health (таймаут 1с)</button>
+  </div>
+
+  <pre id="output">Очікування дій...</pre>
 
   <script>
-    const btn = document.getElementById("loadBtn");
-    const list = document.getElementById("itemsList");
+    const API_URL = "http://localhost:3000";
+    const output = document.getElementById("output");
+    const banner = document.getElementById("degradedBanner");
+    const buttons = [
+      document.getElementById("orderBtn"),
+      document.getElementById("doubleBtn"),
+      document.getElementById("healthBtn")
+    ];
 
-    btn.addEventListener("click", async () => {
-      list.innerHTML = "<li>Завантаження...</li>";
+    let consecutiveFailures = 0;
+    const DEGRADED_THRESHOLD = 3;
+
+    function log(msg) {
+      output.textContent = typeof msg === "string" ? msg : JSON.stringify(msg, null, 2);
+    }
+
+    function recordResult(ok) {
+      if (ok) {
+        consecutiveFailures = 0;
+        return;
+      }
+      consecutiveFailures++;
+      if (consecutiveFailures >= DEGRADED_THRESHOLD) {
+        banner.style.display = "block";
+        buttons.forEach((b) => (b.disabled = true));
+        setTimeout(() => {
+          consecutiveFailures = 0;
+          banner.style.display = "none";
+          buttons.forEach((b) => (b.disabled = false));
+        }, 5000);
+      }
+    }
+
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const backoff = (base, attempt, jitter) =>
+      base * 2 ** attempt + (jitter ? Math.floor(Math.random() * 100) : 0);
+
+    // HTTP-хелпер із таймаутом (AbortController), ретраями та Retry-After
+    async function fetchWithResilience(url, opts = {}) {
+      const { retry = {}, idempotencyKey, requestId, __a = 0, ...init } = opts;
+      const { retries = 2, baseDelayMs = 250, timeoutMs = 3000, jitter = true } = retry;
+
+      const headers = new Headers(init.headers || {});
+      headers.set("Content-Type", "application/json");
+      if (idempotencyKey) headers.set("Idempotency-Key", idempotencyKey);
+      headers.set("X-Request-Id", requestId ?? crypto.randomUUID());
+
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+
       try {
-        const res = await fetch("http://localhost:3000/items");
-        if (!res.ok) throw new Error(`HTTP error: ${res.status}`);
-        const items = await res.json();
+        const res = await fetch(url, { ...init, headers, signal: controller.signal });
 
-        list.innerHTML = "";
-        items.forEach((item) => {
-          const li = document.createElement("li");
-          li.textContent = `${item.id}. ${item.name}`;
-          list.appendChild(li);
-        });
+        if (res.status === 429 && retries >= 1) {
+          const ra = Number(res.headers.get("Retry-After") || 1) * 1000;
+          await sleep(ra);
+          return fetchWithResilience(url, {
+            ...opts,
+            retry: { ...retry, retries: retries - 1 }
+          });
+        }
+
+        if ([500, 502, 503, 504].includes(res.status) && retries >= 1) {
+          await sleep(backoff(baseDelayMs, __a, jitter));
+          return fetchWithResilience(url, {
+            ...opts,
+            __a: __a + 1,
+            retry: { ...retry, retries: retries - 1 }
+          });
+        }
+
+        return res;
       } catch (err) {
-        list.innerHTML = `<li style="color: #ff7675;">Помилка: ${err.message}</li>`;
+        if (retries >= 1) {
+          await sleep(backoff(baseDelayMs, __a, jitter));
+          return fetchWithResilience(url, {
+            ...opts,
+            __a: __a + 1,
+            retry: { ...retry, retries: retries - 1 }
+          });
+        }
+        throw err;
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
+    // Генерація та кешування Idempotency-Key по хешу payload
+    async function payloadHash(obj) {
+      const data = new TextEncoder().encode(JSON.stringify(obj));
+      const digest = await crypto.subtle.digest("SHA-256", data);
+      return Array.from(new Uint8Array(digest))
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
+    }
+
+    async function getOrReuseKey(payload) {
+      const h = await payloadHash(payload);
+      const existing = localStorage.getItem(`idem:${h}`);
+      if (existing) return existing;
+      const fresh = crypto.randomUUID();
+      localStorage.setItem(`idem:${h}`, fresh);
+      return fresh;
+    }
+
+    // 1. Звичайне створення замовлення
+    document.getElementById("orderBtn").addEventListener("click", async () => {
+      const title = document.getElementById("titleInput").value.trim() || "Untitled";
+      const payload = { title };
+      log("Відправка запиту...");
+      try {
+        const idemKey = await getOrReuseKey(payload);
+        const res = await fetchWithResilience(`${API_URL}/orders`, {
+          method: "POST",
+          body: JSON.stringify(payload),
+          idempotencyKey: idemKey,
+          retry: { retries: 2, baseDelayMs: 300, timeoutMs: 3500, jitter: true }
+        });
+        const data = await res.json();
+        recordResult(res.ok);
+        log({ status: res.status, requestId: res.headers.get("X-Request-Id"), data });
+      } catch (err) {
+        recordResult(false);
+        log(`Помилка запиту: ${err.message}`);
+      }
+    });
+
+    // 2. Демонстрація подвійного кліку (обидва повертають однаковий id)
+    document.getElementById("doubleBtn").addEventListener("click", async () => {
+      const title = document.getElementById("titleInput").value.trim() || "Untitled";
+      const payload = { title };
+      log("Відправка 2 паралельних запитів з одним Idempotency-Key...");
+      try {
+        const key = await getOrReuseKey(payload);
+        const [r1, r2] = await Promise.all([
+          fetchWithResilience(`${API_URL}/orders`, { method: "POST", body: JSON.stringify(payload), idempotencyKey: key }),
+          fetchWithResilience(`${API_URL}/orders`, { method: "POST", body: JSON.stringify(payload), idempotencyKey: key })
+        ]);
+        const [d1, d2] = await Promise.all([r1.json(), r2.json()]);
+        recordResult(r1.ok && r2.ok);
+        log({ first: d1, second: d2 });
+      } catch (err) {
+        recordResult(false);
+        log(`Помилка: ${err.message}`);
+      }
+    });
+
+    // 3. Перевірка /health з жорстким таймаутом 1 секунда (AbortController)
+    document.getElementById("healthBtn").addEventListener("click", async () => {
+      log("Перевірка /health (ліміт 1с)...");
+      try {
+        const res = await fetchWithResilience(`${API_URL}/health`, {
+          method: "GET",
+          retry: { retries: 0, timeoutMs: 1000 }
+        });
+        const data = await res.json();
+        recordResult(res.ok);
+        log({ status: res.status, data });
+      } catch (err) {
+        recordResult(false);
+        log(`Запит скасовано (таймаут > 1с або помилка): ${err.name}`);
       }
     });
   </script>
