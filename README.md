@@ -1,5 +1,8 @@
 # Music Store
 
+![CI/CD Backend](https://github.com/papirosa1312/web_labs/actions/workflows/ci.yml/badge.svg)
+
+
 # Запуск бекенду
 ```bash
 cd backend
@@ -27,3 +30,18 @@ docker run --name music-api --rm -d -p 3000:3000 music-store-api:1.0.0
 ```bash
 docker version
 docker run hello-world
+```
+
+## CI/CD (Практична 7)
+
+### Локальний запуск та тестування
+cd backend
+npm ci
+npm test
+npm start
+
+### Пайплайн GitHub Actions
+* Файл конфігурації: `.github/workflows/ci.yml`
+* CI (`push` / `pull_request`): автоматичне встановлення Node.js 20 із кешуванням `npm`, чисте встановлення залежностей (`npm ci`) та запуск юніт-тестів (`npm test`).
+* Delivery (Варіант B — Artifact): при пуші в main після успішних тестів збирається Docker-образ music-store-api:1.0.0, експортується у .tar через docker save та завантажується як артефакт music-store-api-image.
+* Запуски та артефакти: вкладка Actions

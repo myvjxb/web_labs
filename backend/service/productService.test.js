@@ -30,4 +30,26 @@ describe("ProductService unit tests", () => {
       }
     );
   });
+    it("викидає NotFoundError (404), якщо товар не знайдено", () => {
+    const service = new ProductService();
+
+    assert.throws(
+      () => service.getById("non-existent-id"),
+      (err) => {
+        assert.ok(err instanceof AppError);
+        assert.equal(err.status, 404);
+        assert.equal(err.code, "PRODUCT_NOT_FOUND");
+        return true;
+      }
+    );
+  });
+
+  it("видаляє існуючий товар", () => {
+    const service = new ProductService();
+    const created = service.create({ name: "Yamaha Pacifica", price: 320 });
+    service.delete(created.id);
+
+    assert.throws(() => service.getById(created.id), AppError);
+  });
+
 });
