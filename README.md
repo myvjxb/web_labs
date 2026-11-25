@@ -20,3 +20,10 @@ docker run --name music-api --rm -d -p 3000:3000 music-store-api:1.0.0
 Порт: http://localhost:3000 (перевірка: http://localhost:3000/health)
 
 Зупинка: `docker stop music-api`
+
+## Docker — Перевірка та Фронтенд
+
+### Перевірка встановлення
+```bash
+docker version
+docker run hello-world
