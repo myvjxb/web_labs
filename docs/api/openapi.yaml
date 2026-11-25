@@ -1,0 +1,186 @@
+openapi: 3.0.3
+info:
+  title: Music Store API
+  version: 1.0.0
+  description: Контракт базового CRUD для каталогу товарів (модульний моноліт).
+paths:
+  /health:
+    get:
+      summary: Перевірка стану сервісу
+      responses:
+        '200':
+          description: Сервіс працює
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+  /products:
+    get:
+      summary: Отримати список товарів
+      responses:
+        '200':
+          description: Список товарів
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProductResponse'
+    post:
+      summary: Створити новий товар
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProductRequest'
+      responses:
+        '201':
+          description: Товар створено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductResponse'
+        '400':
+          description: Помилка валідації
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /products/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      summary: Отримати товар за ID
+      responses:
+        '200':
+          description: Деталі товару
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductResponse'
+        '404':
+          description: Товар не знайдено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    patch:
+      summary: Оновити товар
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProductRequest'
+      responses:
+        '200':
+          description: Товар оновлено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductResponse'
+        '400':
+          description: Помилка валідації
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Товар не знайдено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      summary: Видалити товар
+      responses:
+        '204':
+          description: Товар видалено
+        '404':
+          description: Товар не знайдено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+components:
+  schemas:
+    CreateProductRequest:
+      type: object
+      required: [name, price]
+      properties:
+        name:
+          type: string
+          example: Fender Stratocaster
+        price:
+          type: number
+          example: 850
+        stock:
+          type: integer
+          example: 5
+        category:
+          type: string
+          example: Guitars
+    UpdateProductRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          example: Fender Stratocaster Player
+        price:
+          type: number
+          example: 900
+        stock:
+          type: integer
+          example: 4
+        category:
+          type: string
+          example: Guitars
+    ProductResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          example: prod-1a2b3c4d
+        name:
+          type: string
+        price:
+          type: number
+        stock:
+          type: integer
+        category:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          example: ValidationError
+        code:
+          type: string
+          example: INVALID_PRODUCT_DATA
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+                example: name
+              message:
+                type: string
+                example: Name is required
