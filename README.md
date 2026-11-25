@@ -45,3 +45,7 @@ npm start
 * CI (`push` / `pull_request`): автоматичне встановлення Node.js 20 із кешуванням `npm`, чисте встановлення залежностей (`npm ci`) та запуск юніт-тестів (`npm test`).
 * Delivery (Варіант B — Artifact): при пуші в main після успішних тестів збирається Docker-образ music-store-api:1.0.0, експортується у .tar через docker save та завантажується як артефакт music-store-api-image.
 * Запуски та артефакти: вкладка Actions
+
+## Observability (Практична 8)
+* **Звіт (60 та 75 балів):** [docs/observability/report.md](./docs/observability/report.md)
+* **JSON власного RED-дашборду:** [docs/observability/my-demo-red-dashboard.json](./docs/observability/my-demo-red-dashboard.json)
